@@ -54,6 +54,38 @@ public struct LivingPortraitMotionState: Codable, Sendable, Equatable {
     public static let still = LivingPortraitMotionState()
 }
 
+/// A host-owned epoch shared by the renderer and explicitly triggered events.
+public struct LivingPortraitClock: Sendable, Equatable {
+    public let epoch: Date
+
+    public init(epoch: Date = Date()) {
+        self.epoch = epoch
+    }
+
+    public func milliseconds(at date: Date) -> Int64 {
+        let milliseconds = date.timeIntervalSince(epoch) * 1_000
+        guard milliseconds.isFinite, milliseconds > 0 else { return 0 }
+        guard milliseconds < Double(Int64.max) else { return Int64.max }
+        return Int64(milliseconds)
+    }
+
+    public func event(
+        id: String,
+        type: String,
+        triggeredAt date: Date = Date(),
+        durationMilliseconds: Int64,
+        intensity: Double = 1
+    ) -> LivingPortraitEvent {
+        LivingPortraitEvent(
+            id: id,
+            type: type,
+            startMilliseconds: milliseconds(at: date),
+            durationMilliseconds: durationMilliseconds,
+            intensity: intensity
+        )
+    }
+}
+
 /// Deterministic reference evaluator for schema version 1.
 /// Other renderers must match the bundled fixtures within `1e-6`.
 public struct LivingPortraitMotionEngine: Sendable {
@@ -73,6 +105,13 @@ public struct LivingPortraitMotionEngine: Sendable {
         guard !reduceMotion else { return .still }
         let milliseconds = max(0, elapsedMilliseconds)
         let motion = scene.motion
+        guard motion.blinkSlotMilliseconds >= 500,
+              motion.blinkDurationMilliseconds >= 80,
+              motion.breathPeriodMilliseconds >= 500,
+              motion.gazePeriodMilliseconds >= 500,
+              motion.windPeriodMilliseconds >= 500 else {
+            return .still
+        }
         let resolvedFocus = focus ?? ambientFocus(at: milliseconds)
         let reaction = reactionEvents.reduce(0) { current, event in
             max(current, authoredEventEnvelope(at: milliseconds, event: event))

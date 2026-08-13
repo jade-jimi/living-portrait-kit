@@ -12,6 +12,7 @@ public struct LivingPortraitStage<LayerContent: View>: View {
     private let windIntensity: Double
     private let reactionEvents: [LivingPortraitEvent]
     private let framesPerSecond: Double
+    private let clock: LivingPortraitClock?
     private let layerResolver: LayerResolver
 
     public init(
@@ -20,6 +21,7 @@ public struct LivingPortraitStage<LayerContent: View>: View {
         windIntensity: Double = 1,
         reactionEvents: [LivingPortraitEvent] = [],
         framesPerSecond: Double = 30,
+        clock: LivingPortraitClock? = nil,
         @ViewBuilder layer: @escaping LayerResolver
     ) {
         self.scene = scene
@@ -27,6 +29,7 @@ public struct LivingPortraitStage<LayerContent: View>: View {
         self.windIntensity = windIntensity
         self.reactionEvents = reactionEvents
         self.framesPerSecond = min(max(framesPerSecond, 1), 60)
+        self.clock = clock
         self.layerResolver = layer
     }
 
@@ -37,6 +40,7 @@ public struct LivingPortraitStage<LayerContent: View>: View {
             windIntensity: windIntensity,
             reactionEvents: reactionEvents,
             framesPerSecond: framesPerSecond,
+            clock: clock,
             reduceMotion: accessibilityReduceMotion,
             layerResolver: layerResolver
         )
@@ -49,6 +53,7 @@ private struct RunningPortraitStage<LayerContent: View>: View {
     let windIntensity: Double
     let reactionEvents: [LivingPortraitEvent]
     let framesPerSecond: Double
+    let clock: LivingPortraitClock?
     let reduceMotion: Bool
     let layerResolver: LivingPortraitStage<LayerContent>.LayerResolver
 
@@ -56,7 +61,8 @@ private struct RunningPortraitStage<LayerContent: View>: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / framesPerSecond, paused: reduceMotion)) { timeline in
-            let milliseconds = max(0, Int64(timeline.date.timeIntervalSince(activationDate) * 1_000))
+            let milliseconds = clock?.milliseconds(at: timeline.date)
+                ?? LivingPortraitClock(epoch: activationDate).milliseconds(at: timeline.date)
             let state = LivingPortraitMotionEngine(scene: scene).state(
                 atMilliseconds: milliseconds,
                 focus: focus,

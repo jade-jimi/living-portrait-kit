@@ -18,6 +18,57 @@ import Testing
     #expect(try JSONSerialization.jsonObject(with: fixture) is [String: Any])
 }
 
+@Test func bundledConformanceFixtureMatchesEveryExpectedScalar() throws {
+    let data = try LivingPortraitContract.bundledConformanceFixtureData()
+    let fixture = try JSONDecoder().decode(ConformanceFixture.self, from: data)
+    #expect(fixture.contractVersion == 1)
+    try fixture.scene.validate()
+
+    for testCase in fixture.cases {
+        let state = LivingPortraitMotionEngine(scene: fixture.scene).state(
+            atMilliseconds: testCase.milliseconds,
+            windIntensity: testCase.windIntensity,
+            reactionEvents: testCase.events,
+            reduceMotion: testCase.reduceMotion
+        )
+        expectNear(state.blink, testCase.expected.blink, tolerance: fixture.tolerance, field: "blink", milliseconds: testCase.milliseconds)
+        expectNear(state.breath, testCase.expected.breath, tolerance: fixture.tolerance, field: "breath", milliseconds: testCase.milliseconds)
+        expectNear(state.gazeX, testCase.expected.gazeX, tolerance: fixture.tolerance, field: "gazeX", milliseconds: testCase.milliseconds)
+        expectNear(state.gazeY, testCase.expected.gazeY, tolerance: fixture.tolerance, field: "gazeY", milliseconds: testCase.milliseconds)
+        expectNear(state.windX, testCase.expected.windX, tolerance: fixture.tolerance, field: "windX", milliseconds: testCase.milliseconds)
+        expectNear(state.reaction, testCase.expected.reaction, tolerance: fixture.tolerance, field: "reaction", milliseconds: testCase.milliseconds)
+    }
+}
+
+@Test func decodingRejectsSchemaInvalidSceneValues() throws {
+    try expectDecodingFailure { $0.schemaVersion = 2 }
+    try expectDecodingFailure { $0.id = "" }
+    try expectDecodingFailure { $0.seed = "not-decimal" }
+    try expectDecodingFailure { $0.seed = String(repeating: "1", count: 21) }
+    try expectDecodingFailure { $0.canvas.aspectWidth = 0 }
+    try expectDecodingFailure { $0.canvas.aspectHeight = 0 }
+    try expectDecodingFailure { $0.layers = [] }
+    try expectDecodingFailure { $0.layers[0].id = "" }
+    try expectDecodingFailure { $0.layers[0].asset = "" }
+    try expectDecodingFailure { $0.motion.blinkSlotMilliseconds = 0 }
+    try expectDecodingFailure { $0.motion.blinkDurationMilliseconds = 0 }
+    try expectDecodingFailure { $0.motion.blinkProbability = 1.1 }
+    try expectDecodingFailure { $0.motion.breathPeriodMilliseconds = 0 }
+    try expectDecodingFailure { $0.motion.breathScale = -1 }
+    try expectDecodingFailure { $0.motion.gazePeriodMilliseconds = 0 }
+    try expectDecodingFailure { $0.motion.parallaxUnits = -1 }
+    try expectDecodingFailure { $0.motion.windPeriodMilliseconds = 0 }
+    try expectDecodingFailure { $0.motion.windUnits = -1 }
+    try expectDecodingFailure { $0.motion.windRotationDegrees = -1 }
+    try expectDecodingFailure { $0.motion.reactionScale = -1 }
+}
+
+@Test func invalidMutatedPeriodFailsClosedInsteadOfCrashing() {
+    var scene = fixtureScene()
+    scene.motion.breathPeriodMilliseconds = 0
+    #expect(LivingPortraitMotionEngine(scene: scene).state(atMilliseconds: 1_000) == .still)
+}
+
 @Test func sameInputsProduceSameState() {
     let engine = LivingPortraitMotionEngine(scene: fixtureScene())
     #expect(engine.state(atMilliseconds: 123_456, windIntensity: 0.8) == engine.state(atMilliseconds: 123_456, windIntensity: 0.8))
@@ -65,6 +116,26 @@ import Testing
     #expect(engine.state(atMilliseconds: 2_000, reactionEvents: [event]).reaction == 0)
 }
 
+@Test func sharedClockTriggersEventAtTheHostEpoch() {
+    let clock = LivingPortraitClock(epoch: Date(timeIntervalSinceReferenceDate: 1_000))
+    let triggeredAt = Date(timeIntervalSinceReferenceDate: 1_017.5)
+    let event = clock.event(
+        id: "host-1",
+        type: "host.cue",
+        triggeredAt: triggeredAt,
+        durationMilliseconds: 1_000,
+        intensity: 0.8
+    )
+
+    #expect(event.startMilliseconds == 17_500)
+    let activeMilliseconds = clock.milliseconds(at: Date(timeIntervalSinceReferenceDate: 1_018))
+    let active = LivingPortraitMotionEngine(scene: fixtureScene()).state(
+        atMilliseconds: activeMilliseconds,
+        reactionEvents: [event]
+    )
+    #expect(abs(active.reaction - 0.8) <= 0.000_001)
+}
+
 @Test func zeroWindDisablesWindTransform() {
     let engine = LivingPortraitMotionEngine(scene: fixtureScene())
     for tick in 0...200 {
@@ -84,4 +155,50 @@ private func fixtureScene() -> LivingPortraitScene {
             .init(id: "body", role: .character, asset: "character", zIndex: 10),
         ]
     )
+}
+
+private struct ConformanceFixture: Decodable {
+    struct TestCase: Decodable {
+        struct Expected: Decodable {
+            let blink: Double
+            let breath: Double
+            let gazeX: Double
+            let gazeY: Double
+            let windX: Double
+            let reaction: Double
+        }
+
+        let milliseconds: Int64
+        let windIntensity: Double
+        let events: [LivingPortraitEvent]
+        let reduceMotion: Bool
+        let expected: Expected
+    }
+
+    let contractVersion: Int
+    let tolerance: Double
+    let scene: LivingPortraitScene
+    let cases: [TestCase]
+}
+
+private func expectNear(
+    _ actual: Double,
+    _ expected: Double,
+    tolerance: Double,
+    field: String,
+    milliseconds: Int64
+) {
+    #expect(
+        abs(actual - expected) <= tolerance,
+        "\(field) at \(milliseconds) ms: expected \(expected), got \(actual)"
+    )
+}
+
+private func expectDecodingFailure(_ mutate: (inout LivingPortraitScene) -> Void) throws {
+    var scene = fixtureScene()
+    mutate(&scene)
+    let data = try JSONEncoder().encode(scene)
+    #expect(throws: LivingPortraitValidationError.self) {
+        try JSONDecoder().decode(LivingPortraitScene.self, from: data)
+    }
 }

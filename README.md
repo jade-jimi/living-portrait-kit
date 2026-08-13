@@ -56,6 +56,29 @@ LivingPortraitStage(scene: scene) { layer, _ in
 }
 ```
 
+Decoding a `LivingPortraitScene` validates the version 1 schema values automatically. Call
+`try scene.validate()` after mutating a scene in memory. Invalid periods are rejected during
+decoding, and the evaluator fails closed to a still state if an invalid period is introduced
+later.
+
+For a host-triggered reaction, create one clock and share its epoch with the event and stage:
+
+```swift
+let clock = LivingPortraitClock()
+let event = clock.event(
+    id: "cue-17",
+    type: "host.cue",
+    durationMilliseconds: 1_000,
+    intensity: 0.8
+)
+
+LivingPortraitStage(scene: scene, reactionEvents: [event], clock: clock) { layer, _ in
+    Image(layer.asset)
+}
+```
+
+Omit `clock` to retain the renderer-owned epoch used by earlier releases.
+
 The renderer automatically respects Reduce Motion and becomes still.
 
 ## macOS companion versus widget

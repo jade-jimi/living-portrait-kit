@@ -1,6 +1,15 @@
 import Foundation
 
 public struct LivingPortraitScene: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case id
+        case seed
+        case canvas
+        case layers
+        case motion
+    }
+
     public struct Canvas: Codable, Sendable, Equatable {
         public var aspectWidth: Double
         public var aspectHeight: Double
@@ -100,7 +109,74 @@ public struct LivingPortraitScene: Codable, Sendable, Equatable {
         self.motion = motion
     }
 
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        id = try container.decode(String.self, forKey: .id)
+        seed = try container.decode(String.self, forKey: .seed)
+        canvas = try container.decode(Canvas.self, forKey: .canvas)
+        layers = try container.decode([Layer].self, forKey: .layers)
+        motion = try container.decode(Motion.self, forKey: .motion)
+        try validate()
+    }
+
+    /// Validates values against the bundled version 1 scene schema.
+    /// JSON decoding calls this automatically; hosts should call it after mutating a scene.
+    public func validate() throws {
+        guard schemaVersion == 1 else {
+            throw LivingPortraitValidationError(path: "schemaVersion", reason: "must equal 1")
+        }
+        guard !id.isEmpty else {
+            throw LivingPortraitValidationError(path: "id", reason: "must not be empty")
+        }
+        guard (1...20).contains(seed.count), seed.utf8.allSatisfy({ (48...57).contains($0) }) else {
+            throw LivingPortraitValidationError(path: "seed", reason: "must contain 1 to 20 decimal digits")
+        }
+        guard canvas.aspectWidth.isFinite, canvas.aspectWidth > 0 else {
+            throw LivingPortraitValidationError(path: "canvas.aspectWidth", reason: "must be finite and greater than zero")
+        }
+        guard canvas.aspectHeight.isFinite, canvas.aspectHeight > 0 else {
+            throw LivingPortraitValidationError(path: "canvas.aspectHeight", reason: "must be finite and greater than zero")
+        }
+        guard layers.count >= 2 else {
+            throw LivingPortraitValidationError(path: "layers", reason: "must contain at least two layers")
+        }
+        for (index, layer) in layers.enumerated() {
+            guard !layer.id.isEmpty else {
+                throw LivingPortraitValidationError(path: "layers[\(index)].id", reason: "must not be empty")
+            }
+            guard !layer.asset.isEmpty else {
+                throw LivingPortraitValidationError(path: "layers[\(index)].asset", reason: "must not be empty")
+            }
+        }
+
+        try validateMinimum(motion.blinkSlotMilliseconds, minimum: 500, path: "motion.blinkSlotMilliseconds")
+        try validateMinimum(motion.blinkDurationMilliseconds, minimum: 80, path: "motion.blinkDurationMilliseconds")
+        try validateUnitInterval(motion.blinkProbability, path: "motion.blinkProbability")
+        try validateMinimum(motion.breathPeriodMilliseconds, minimum: 500, path: "motion.breathPeriodMilliseconds")
+        try validateNonnegative(motion.breathScale, path: "motion.breathScale")
+        try validateMinimum(motion.gazePeriodMilliseconds, minimum: 500, path: "motion.gazePeriodMilliseconds")
+        try validateNonnegative(motion.parallaxUnits, path: "motion.parallaxUnits")
+        try validateMinimum(motion.windPeriodMilliseconds, minimum: 500, path: "motion.windPeriodMilliseconds")
+        try validateNonnegative(motion.windUnits, path: "motion.windUnits")
+        try validateNonnegative(motion.windRotationDegrees, path: "motion.windRotationDegrees")
+        try validateNonnegative(motion.reactionScale, path: "motion.reactionScale")
+    }
+
     public var numericSeed: UInt64 { UInt64(seed) ?? stableStringSeed(seed) }
+}
+
+/// A stable, field-addressable failure returned by `LivingPortraitScene.validate()`.
+public struct LivingPortraitValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+    public let path: String
+    public let reason: String
+
+    public var description: String { "Invalid \(path): \(reason)" }
+
+    init(path: String, reason: String) {
+        self.path = path
+        self.reason = reason
+    }
 }
 
 /// A product event authored by the host app, not ambient behavior invented by the engine.
@@ -147,6 +223,24 @@ public enum LivingPortraitContract {
 private func stableStringSeed(_ string: String) -> UInt64 {
     string.utf8.reduce(14_695_981_039_346_656_037) { value, byte in
         (value ^ UInt64(byte)) &* 1_099_511_628_211
+    }
+}
+
+private func validateMinimum(_ value: Int64, minimum: Int64, path: String) throws {
+    guard value >= minimum else {
+        throw LivingPortraitValidationError(path: path, reason: "must be at least \(minimum)")
+    }
+}
+
+private func validateNonnegative(_ value: Double, path: String) throws {
+    guard value.isFinite, value >= 0 else {
+        throw LivingPortraitValidationError(path: path, reason: "must be finite and nonnegative")
+    }
+}
+
+private func validateUnitInterval(_ value: Double, path: String) throws {
+    guard value.isFinite, (0...1).contains(value) else {
+        throw LivingPortraitValidationError(path: path, reason: "must be finite and between zero and one")
     }
 }
 

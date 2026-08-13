@@ -6,7 +6,9 @@ wind transforms, and host-triggered reaction envelopes. It does not warp faces, 
 play GIFs, use a network, or include private art.
 
 The public contract is platform-neutral JSON, not Swift. `LivingPortraitCore` is the Swift
-reference decoder/evaluator and `LivingPortraitSwiftUI` is the first renderer.
+reference decoder/evaluator and `LivingPortraitSwiftUI` is the first renderer. Optional
+model-assisted preparation lives in the desktop-only `LivingPortraitAuthoring` target; it is not
+a runtime dependency. See [AUTHORING.md](AUTHORING.md).
 
 ## Requirements
 
@@ -23,6 +25,10 @@ living-portrait.schema.json
              LivingPortraitCore
                          |
              LivingPortraitSwiftUI
+
+source portrait -> LivingPortraitAuthoring -> human approval -> signed validated package
+                                                        |
+                                                LivingPortraitCore
 ```
 
 Every future renderer must decode the same schema and match the deterministic conformance

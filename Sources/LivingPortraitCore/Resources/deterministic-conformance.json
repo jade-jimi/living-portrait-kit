@@ -1,0 +1,61 @@
+{
+  "contractVersion": 1,
+  "tolerance": 0.000001,
+  "scene": {
+    "schemaVersion": 1,
+    "id": "conformance.v1",
+    "seed": "424242",
+    "canvas": { "aspectWidth": 9, "aspectHeight": 16 },
+    "layers": [
+      { "id": "bg", "role": "background", "asset": "background", "zIndex": 0 },
+      { "id": "body", "role": "character", "asset": "character", "zIndex": 10 },
+      { "id": "eyes", "role": "blink", "asset": "closed-eyes", "zIndex": 20 },
+      { "id": "hair", "role": "wind", "asset": "foreground-hair", "zIndex": 30 }
+    ],
+    "motion": {
+      "blinkSlotMilliseconds": 3800,
+      "blinkDurationMilliseconds": 220,
+      "blinkProbability": 0.72,
+      "breathPeriodMilliseconds": 5600,
+      "breathScale": 0.012,
+      "gazePeriodMilliseconds": 4400,
+      "parallaxUnits": 7,
+      "windPeriodMilliseconds": 3100,
+      "windUnits": 2.4,
+      "windRotationDegrees": 0.7,
+      "reactionScale": 0.008
+    }
+  },
+  "cases": [
+    {
+      "milliseconds": 0,
+      "windIntensity": 1,
+      "events": [],
+      "reduceMotion": false,
+      "expected": { "blink": 0, "breath": 1, "gazeX": 0.23573066432, "gazeY": 0.055200700326, "windX": 0.6475111006, "reaction": 0 }
+    },
+    {
+      "milliseconds": 1234,
+      "windIntensity": 0.5,
+      "events": [],
+      "reduceMotion": false,
+      "expected": { "blink": 0, "breath": 1.004888940417, "gazeX": 0.210510064081, "gazeY": 0.060444599387, "windX": 0.723923651402, "reaction": 0 }
+    },
+    {
+      "milliseconds": 17890,
+      "windIntensity": 1.25,
+      "events": [
+        { "id": "beat-17", "type": "host.cue", "startMilliseconds": 17500, "durationMilliseconds": 1000, "intensity": 0.8 }
+      ],
+      "reduceMotion": false,
+      "expected": { "blink": 0, "breath": 1.003954909617, "gazeX": 0.23368533767, "gazeY": 0.049569531754, "windX": -2.495380994375, "reaction": 0.8 }
+    },
+    {
+      "milliseconds": 50000,
+      "windIntensity": 1,
+      "events": [],
+      "reduceMotion": true,
+      "expected": { "blink": 0, "breath": 1, "gazeX": 0, "gazeY": 0, "windX": 0, "reaction": 0 }
+    }
+  ]
+}

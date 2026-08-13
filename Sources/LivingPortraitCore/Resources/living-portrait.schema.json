@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://livingportrait.dev/schema/living-portrait-v1.json",
+  "title": "Living Portrait Scene",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "seed", "canvas", "layers", "motion"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "seed": { "type": "string", "pattern": "^[0-9]{1,20}$" },
+    "canvas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aspectWidth", "aspectHeight"],
+      "properties": {
+        "aspectWidth": { "type": "number", "exclusiveMinimum": 0 },
+        "aspectHeight": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "role", "asset", "zIndex"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "role": { "enum": ["background", "character", "blink", "wind", "reaction"] },
+          "asset": { "type": "string", "minLength": 1 },
+          "zIndex": { "type": "integer" }
+        }
+      }
+    },
+    "motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blinkSlotMilliseconds", "blinkDurationMilliseconds", "blinkProbability",
+        "breathPeriodMilliseconds", "breathScale", "gazePeriodMilliseconds",
+        "parallaxUnits", "windPeriodMilliseconds", "windUnits", "windRotationDegrees",
+        "reactionScale"
+      ],
+      "properties": {
+        "blinkSlotMilliseconds": { "type": "integer", "minimum": 500 },
+        "blinkDurationMilliseconds": { "type": "integer", "minimum": 80 },
+        "blinkProbability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "breathPeriodMilliseconds": { "type": "integer", "minimum": 500 },
+        "breathScale": { "type": "number", "minimum": 0 },
+        "gazePeriodMilliseconds": { "type": "integer", "minimum": 500 },
+        "parallaxUnits": { "type": "number", "minimum": 0 },
+        "windPeriodMilliseconds": { "type": "integer", "minimum": 500 },
+        "windUnits": { "type": "number", "minimum": 0 },
+        "windRotationDegrees": { "type": "number", "minimum": 0 },
+        "reactionScale": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

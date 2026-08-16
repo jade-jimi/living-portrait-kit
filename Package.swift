@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "LivingPortraitCore", targets: ["LivingPortraitCore"]),
         .library(name: "LivingPortraitSwiftUI", targets: ["LivingPortraitSwiftUI"]),
         .library(name: "LivingPortraitAuthoring", targets: ["LivingPortraitAuthoring"]),
+        .executable(name: "living-portrait-master", targets: ["LivingPortraitMasterCLI"]),
     ],
     targets: [
         .target(
@@ -25,6 +26,10 @@ let package = Package(
         .target(
             name: "LivingPortraitAuthoring",
             dependencies: ["LivingPortraitCore"]
+        ),
+        .executableTarget(
+            name: "LivingPortraitMasterCLI",
+            dependencies: ["LivingPortraitAuthoring", "LivingPortraitCore"]
         ),
         .testTarget(
             name: "LivingPortraitCoreTests",

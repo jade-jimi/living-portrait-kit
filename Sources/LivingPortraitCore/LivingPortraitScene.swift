@@ -8,6 +8,7 @@ public struct LivingPortraitScene: Codable, Sendable, Equatable {
         case canvas
         case layers
         case motion
+        case fallbackAsset
     }
 
     public struct Canvas: Codable, Sendable, Equatable {
@@ -92,6 +93,9 @@ public struct LivingPortraitScene: Codable, Sendable, Equatable {
     public var canvas: Canvas
     public var layers: [Layer]
     public var motion: Motion
+    /// Optional signed still used when the layered runtime cannot validate or render the scene.
+    /// Declaring it opts the scene into the strict same-canvas layered-package contract.
+    public var fallbackAsset: String?
 
     public init(
         schemaVersion: Int = 1,
@@ -99,7 +103,8 @@ public struct LivingPortraitScene: Codable, Sendable, Equatable {
         seed: String,
         canvas: Canvas = Canvas(),
         layers: [Layer],
-        motion: Motion = .subtle
+        motion: Motion = .subtle,
+        fallbackAsset: String? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.id = id
@@ -107,6 +112,7 @@ public struct LivingPortraitScene: Codable, Sendable, Equatable {
         self.canvas = canvas
         self.layers = layers
         self.motion = motion
+        self.fallbackAsset = fallbackAsset
     }
 
     public init(from decoder: Decoder) throws {
@@ -117,6 +123,7 @@ public struct LivingPortraitScene: Codable, Sendable, Equatable {
         canvas = try container.decode(Canvas.self, forKey: .canvas)
         layers = try container.decode([Layer].self, forKey: .layers)
         motion = try container.decode(Motion.self, forKey: .motion)
+        fallbackAsset = try container.decodeIfPresent(String.self, forKey: .fallbackAsset)
         try validate()
     }
 
@@ -141,12 +148,23 @@ public struct LivingPortraitScene: Codable, Sendable, Equatable {
         guard layers.count >= 2 else {
             throw LivingPortraitValidationError(path: "layers", reason: "must contain at least two layers")
         }
+        guard Set(layers.map(\.id)).count == layers.count else {
+            throw LivingPortraitValidationError(path: "layers", reason: "layer IDs must be unique")
+        }
         for (index, layer) in layers.enumerated() {
             guard !layer.id.isEmpty else {
                 throw LivingPortraitValidationError(path: "layers[\(index)].id", reason: "must not be empty")
             }
             guard !layer.asset.isEmpty else {
                 throw LivingPortraitValidationError(path: "layers[\(index)].asset", reason: "must not be empty")
+            }
+            guard isSafeAssetPath(layer.asset) else {
+                throw LivingPortraitValidationError(path: "layers[\(index)].asset", reason: "must be a safe relative path")
+            }
+        }
+        if let fallbackAsset {
+            guard isSafeAssetPath(fallbackAsset) else {
+                throw LivingPortraitValidationError(path: "fallbackAsset", reason: "must be a safe relative path")
             }
         }
 
@@ -164,6 +182,13 @@ public struct LivingPortraitScene: Codable, Sendable, Equatable {
     }
 
     public var numericSeed: UInt64 { UInt64(seed) ?? stableStringSeed(seed) }
+}
+
+private func isSafeAssetPath(_ path: String) -> Bool {
+    !path.isEmpty
+        && !path.hasPrefix("/")
+        && path.split(separator: "/", omittingEmptySubsequences: false)
+            .allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." })
 }
 
 /// A stable, field-addressable failure returned by `LivingPortraitScene.validate()`.

@@ -26,7 +26,7 @@ living-portrait.schema.json
                          |
              LivingPortraitSwiftUI
 
-source portrait -> LivingPortraitAuthoring -> human approval -> signed validated package
+source portrait -> provider plan/generate/critic/retry -> human choose/reject -> signed package
                                                         |
                                                 LivingPortraitCore
 ```
@@ -46,8 +46,19 @@ All art uses one shared canvas and registration point:
 - `wind`: separated foreground hair or fabric, transformed by wind scalars
 - `reaction`: a rare authored accent, faded by the `reaction` scalar
 
+For downloadable character packages, set `fallbackAsset` on the scene. That opt-in activates the
+strict bundle contract: exactly one background and character, at most one blink/wind/reaction,
+one distinct fallback still, and decodable PNGs registered to the same pixel canvas. The signed
+manifest records `layer.<role>`/`fallback` roles and pixel dimensions. A package that fails any of
+those checks is never partially rendered.
+
 Asset strings are opaque. `Image(layer.asset)` is only one possible resolver. Apps may use
 asset catalogs, downloaded files, Compose resources, Metal textures, or another store.
+
+After signature validation, hosts can read `ValidatedLivingPortraitPackage.layerBundle`. Its
+bytes are already inventory-, digest-, role-, format-, and canvas-checked. Pass the validated
+scene to `LivingPortraitStage`, resolve each `layer.asset` from that bundle, and show
+`layerBundle.fallback` whenever package loading or native image construction fails.
 
 ## SwiftUI usage
 
@@ -87,6 +98,20 @@ Omit `clock` to retain the renderer-owned epoch used by earlier releases.
 
 The renderer automatically respects Reduce Motion and becomes still.
 
+## Authoring CLI
+
+Create a fail-closed local workspace, then follow its generated `WORKSPACE.md`:
+
+```sh
+swift run living-portrait-master init MyPortrait
+swift run living-portrait-master --help
+```
+
+The CLI supports workspace validation, Ed25519 key generation, explicit human-approved package
+baking, and package verification. It never invokes a model by itself and never overwrites an
+existing workspace, key, or package directory. See [AUTHORING.md](AUTHORING.md) for the complete
+workflow.
+
 ## macOS companion versus widget
 
 **Widget = static state. Companion panel = continuous presence.** WidgetKit should show a
@@ -111,6 +136,7 @@ the engine never invents a character reaction on a random timer.
 
 ```sh
 swift test
+swift run living-portrait-master --help
 ```
 
 ## License

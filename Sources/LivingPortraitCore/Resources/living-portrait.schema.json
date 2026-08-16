@@ -33,6 +33,11 @@
         }
       }
     },
+    "fallbackAsset": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//).+$"
+    },
     "motion": {
       "type": "object",
       "additionalProperties": false,

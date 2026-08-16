@@ -1,4 +1,6 @@
 import Foundation
+import CoreGraphics
+import ImageIO
 import Testing
 @testable import LivingPortraitCore
 
@@ -146,6 +148,63 @@ import Testing
     }
 }
 
+@Test func strictLayerBundleRequiresDecodableSameCanvasImagesAndProvidesFallback() throws {
+    let onePixel = try png(width: 1, height: 1)
+    let scene = LivingPortraitScene(
+        id: "mare.current",
+        seed: "20260816",
+        layers: [
+            .init(id: "background", role: .background, asset: "background.png", zIndex: 0),
+            .init(id: "character", role: .character, asset: "character.png", zIndex: 10),
+            .init(id: "blink", role: .blink, asset: "blink.png", zIndex: 20),
+            .init(id: "wind", role: .wind, asset: "wind.png", zIndex: 30),
+            .init(id: "reaction", role: .reaction, asset: "reaction.png", zIndex: 40),
+        ],
+        fallbackAsset: "fallback.png"
+    )
+    var files = Dictionary(uniqueKeysWithValues: (scene.layers.map(\.asset) + ["fallback.png"]).map {
+        ($0, onePixel)
+    })
+
+    let validated = try LivingPortraitLayerBundleValidator.validate(scene: scene, files: files)
+    let bundle = try #require(validated)
+    #expect(bundle.canvas == .init(width: 1, height: 1))
+    #expect(bundle.fallback.path == "fallback.png")
+    #expect(bundle.blink?.path == "blink.png")
+
+    files["reaction.png"] = try png(width: 2, height: 1)
+    #expect(throws: LivingPortraitLayerBundleError.canvasMismatch) {
+        try LivingPortraitLayerBundleValidator.validate(scene: scene, files: files)
+    }
+}
+
+@Test func strictLayerBundleRejectsDuplicateOrMissingAssets() throws {
+    let image = try png(width: 1, height: 1)
+    var scene = LivingPortraitScene(
+        id: "mono.current",
+        seed: "7",
+        layers: [
+            .init(id: "background", role: .background, asset: "background.png", zIndex: 0),
+            .init(id: "character", role: .character, asset: "character.png", zIndex: 10),
+        ],
+        fallbackAsset: "fallback.png"
+    )
+    #expect(throws: LivingPortraitLayerBundleError.missingAsset("fallback.png")) {
+        try LivingPortraitLayerBundleValidator.validate(
+            scene: scene,
+            files: ["background.png": image, "character.png": image]
+        )
+    }
+
+    scene.fallbackAsset = "character.png"
+    #expect(throws: LivingPortraitLayerBundleError.duplicateAssetReference) {
+        try LivingPortraitLayerBundleValidator.validate(
+            scene: scene,
+            files: ["background.png": image, "character.png": image]
+        )
+    }
+}
+
 private func fixtureScene() -> LivingPortraitScene {
     LivingPortraitScene(
         id: "test",
@@ -201,4 +260,24 @@ private func expectDecodingFailure(_ mutate: (inout LivingPortraitScene) -> Void
     #expect(throws: LivingPortraitValidationError.self) {
         try JSONDecoder().decode(LivingPortraitScene.self, from: data)
     }
+}
+
+private func png(width: Int, height: Int) throws -> Data {
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    let bytesPerRow = width * 4
+    let context = try #require(CGContext(
+        data: nil,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: bytesPerRow,
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ))
+    let image = try #require(context.makeImage())
+    let data = NSMutableData()
+    let destination = try #require(CGImageDestinationCreateWithData(data, "public.png" as CFString, 1, nil))
+    CGImageDestinationAddImage(destination, image, nil)
+    #expect(CGImageDestinationFinalize(destination))
+    return data as Data
 }

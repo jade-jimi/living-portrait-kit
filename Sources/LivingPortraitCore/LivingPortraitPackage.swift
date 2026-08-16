@@ -83,6 +83,8 @@ public struct ValidatedLivingPortraitPackage: Sendable {
     public let receipt: LivingPortraitValidationReceipt
     public let scene: LivingPortraitScene
     public let files: [String: Data]
+    /// Present only for strict same-canvas packages that declare a signed fallback still.
+    public let layerBundle: LivingPortraitRuntimeLayerBundle?
 }
 
 public enum LivingPortraitPackageLoadResult: Sendable {
@@ -165,11 +167,42 @@ public enum LivingPortraitPackageLoader {
         }
         let scene = try decoder.decode(LivingPortraitScene.self, from: sceneData)
         try scene.validate()
+        if scene.fallbackAsset != nil, !receipt.passedChecks.contains("layerBundle") {
+            throw LivingPortraitPackageError.incompleteValidationReceipt
+        }
+        for layer in scene.layers where files[layer.asset] == nil {
+            throw LivingPortraitPackageError.missingSceneAsset(layer.asset)
+        }
+        let layerBundle: LivingPortraitRuntimeLayerBundle?
+        do {
+            layerBundle = try LivingPortraitLayerBundleValidator.validate(scene: scene, files: files)
+        } catch {
+            throw LivingPortraitPackageError.invalidLayerBundle(String(describing: error))
+        }
+        if let layerBundle {
+            let runtimePaths = Set(scene.layers.map(\.asset) + [layerBundle.fallback.path])
+            for file in manifest.files where runtimePaths.contains(file.path) {
+                let expectedRole: String
+                if file.path == layerBundle.fallback.path {
+                    expectedRole = "fallback"
+                } else if let role = scene.layers.first(where: { $0.asset == file.path })?.role {
+                    expectedRole = "layer.\(role.rawValue)"
+                } else {
+                    throw LivingPortraitPackageError.invalidLayerMetadata(file.path)
+                }
+                guard file.role == expectedRole,
+                      file.pixelWidth == layerBundle.canvas.width,
+                      file.pixelHeight == layerBundle.canvas.height else {
+                    throw LivingPortraitPackageError.invalidLayerMetadata(file.path)
+                }
+            }
+        }
         return ValidatedLivingPortraitPackage(
             manifest: manifest,
             receipt: receipt,
             scene: scene,
-            files: files
+            files: files,
+            layerBundle: layerBundle
         )
     }
 
@@ -191,4 +224,7 @@ public enum LivingPortraitPackageError: Error, Sendable, Equatable {
     case invalidFileInventory
     case fileDigestMismatch(String)
     case missingScene
+    case missingSceneAsset(String)
+    case invalidLayerBundle(String)
+    case invalidLayerMetadata(String)
 }

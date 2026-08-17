@@ -15,7 +15,7 @@ let package = Package(
     targets: [
         .target(
             name: "LivingPortraitCore",
-            resources: [.copy("Resources")]
+            resources: [.process("Resources")]
         ),
         .target(
             name: "LivingPortraitSwiftUI",
